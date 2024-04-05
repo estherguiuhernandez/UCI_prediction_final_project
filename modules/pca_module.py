@@ -4,14 +4,17 @@ import pandas as pd
 import matplotlib.pyplot as plt 
 import numpy as np
 
-def perform_pca(train_data, test_data, n_components=None):
+def perform_pca(train_data, test_data, categorical_features=None, n_components=None):
     """
     Perform Principal Component Analysis (PCA) on the given training and testing DataFrames.
 
     Parameters:
     train_data (DataFrame): The input training DataFrame containing the features.
     test_data (DataFrame): The input testing DataFrame containing the features.
-    n_components (int or None): Number of components to keep. If None, all components are kept. If specified as 0. it represents the variance explained, for example 0.85 would mean as many components as to explain 85% variance
+    categorical_features (list or None): List of categorical feature names.
+    n_components (int or None): Number of components to keep. If None, all components are kept. 
+                                If specified as a float, it represents the variance explained, 
+                                for example 0.85 would mean as many components as to explain 85% variance.
 
     Returns:
     train_pca_result (DataFrame): DataFrame containing the transformed features after PCA for the training set.
@@ -20,10 +23,18 @@ def perform_pca(train_data, test_data, n_components=None):
     explained_variance_ratio (array): Explained variance ratio of each selected component.
     """
 
-    # Step 1: Standardize the features separately for training and testing sets
+    # Remove the RecordID column from both train_data and test_data
+    train_data = train_data.drop(columns=['RecordID'])
+    test_data = test_data.drop(columns=['RecordID'])
+
+    # Separate non-categorical columns from the rest of the DataFrame
+    non_categorical_train = train_data.drop(columns=categorical_features)
+    non_categorical_test = test_data.drop(columns=categorical_features)
+
+    # Step 1: Standardize the non-categorical features separately for training and testing sets
     scaler = StandardScaler()
-    scaled_train_data = scaler.fit_transform(train_data)
-    scaled_test_data = scaler.transform(test_data)  # Use transform on testing set, don't fit again
+    scaled_train_data = scaler.fit_transform(non_categorical_train)
+    scaled_test_data = scaler.transform(non_categorical_test)  # Use transform on testing set, don't fit again
 
     # Step 2: Perform PCA on the training set
     pca = PCA(n_components=n_components)
@@ -33,8 +44,15 @@ def perform_pca(train_data, test_data, n_components=None):
     test_pca_result = pca.transform(scaled_test_data)
 
     # Convert the results to DataFrames
-    train_pca_result_df = pd.DataFrame(data=train_pca_result, columns=[f"PC{i + 1}" for i in range(train_pca_result.shape[1])])
-    test_pca_result_df = pd.DataFrame(data=test_pca_result, columns=[f"PC{i + 1}" for i in range(test_pca_result.shape[1])])
+    train_pca_result_df = pd.DataFrame(data=train_pca_result, columns=[f"PC{i + 1}" for i in range(train_pca_result.shape[1])], index=train_data.index)
+    test_pca_result_df = pd.DataFrame(data=test_pca_result, columns=[f"PC{i + 1}" for i in range(test_pca_result.shape[1])], index=test_data.index)
+
+    # Merge the PCA results with the categorical columns
+    train_categorical = train_data[categorical_features]
+    test_categorical = test_data[categorical_features]
+    
+    train_pca_result_df = pd.concat([train_pca_result_df, train_categorical], axis=1)
+    test_pca_result_df = pd.concat([test_pca_result_df, test_categorical], axis=1)
 
     # Print the explained variance ratio
     explained_variance_ratio = pca.explained_variance_ratio_
@@ -53,11 +71,10 @@ def perform_pca(train_data, test_data, n_components=None):
 
     plt.show()
 
-     # Print the number of components required to achieve the specified variance explained
+    # Print the number of components required to achieve the specified variance explained
     if n_components is not None:
         cumulative_variance = np.cumsum(explained_variance_ratio)
         num_components_threshold = np.argmax(cumulative_variance >= n_components) + 1
         print(f"Number of components required to achieve {n_components:.2f} variance explained: {num_components_threshold}")
-
 
     return train_pca_result_df, test_pca_result_df, pca, explained_variance_ratio
